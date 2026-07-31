@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "target": "gemini.google.com",
+  "selectors": {
+    "composer": "rich-textarea .ql-editor[contenteditable='true'], div.ql-editor[role='textbox'][contenteditable='true']",
+    "fileInput": "input[type='file']",
+    "attachmentButton": "button[aria-label='Upload & tools'], button[aria-label*='Upload']",
+    "uploadFilesMenuItem": "[role='menuitem']",
+    "createImageMenuItem": "[role='menuitemcheckbox']",
+    "sendButton": "button[aria-label='Send message'], button[aria-label='Send'], button.send-button",
+    "stopButton": "button[aria-label*='Stop response'], button[aria-label='Stop']",
+    "conversationArticle": "main user-query, main model-response",
+    "conversationTurn": "main user-query, main model-response",
+    "assistantMessage": "main model-response",
+    "userMessage": "main user-query",
+    "generatedImage": "main model-response img[src^='blob:'], main model-response img[src^='data:'], main model-response img[src*='googleusercontent.com'], main model-response img[src*='ggpht.com']",
+    "image": "img",
+    "attachment": "rich-textarea img, [class*='attachment'] img, [class*='file-preview'], [class*='uploaded']",
+    "uploadBusy": "[aria-busy='true'], mat-progress-spinner, [class*='upload'][class*='loading']"
+  },
+  "labels": {
+    "login": ["Sign in"],
+    "verification": ["Verify it's you", "Unusual traffic", "reCAPTCHA"],
+    "usageLimit": ["limit reached", "try again later", "too many requests", "You've reached your limit"],
+    "addFiles": ["Upload files"],
+    "createImage": ["Create image"]
+  }
+}

@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Auto Gemini Images</title>
+    <link rel="stylesheet" href="sidepanel.css">
+  </head>
+  <body>
+    <header id="mainHeader" class="topbar">
+      <div class="mark" aria-hidden="true">AI</div>
+      <div class="brand-copy">
+        <h1>Auto Gemini Images</h1>
+        <p>Gemini image automation</p>
+      </div>
+      <span id="statusBadge" class="badge">Sẵn sàng</span>
+    </header>
+
+    <section id="wrongPage" class="wrong-page" hidden>
+      <div class="mark" aria-hidden="true">AI</div>
+      <h2>Mở Gemini để tiếp tục</h2>
+      <p>Extension chỉ điều khiển trang gemini.google.com. Prompt, ảnh tham chiếu và hàng chờ vẫn được giữ nguyên.</p>
+      <button id="moveToGemini" class="button primary" type="button">
+        Chuyển đến Gemini <span>→</span>
+      </button>
+    </section>
+
+    <main id="mainInterface" class="app-shell">
+      <nav class="tabs" aria-label="Khu vực làm việc">
+        <button class="tab-button active" data-tab="create" aria-selected="true" type="button">
+          <span>Tạo ảnh hàng loạt</span>
+        </button>
+        <button class="tab-button" data-tab="queue" aria-selected="false" type="button">
+          <span>Hàng chờ</span>
+          <span id="queueTabCount" class="tab-count">0</span>
+        </button>
+        <button class="tab-button" data-tab="logs" aria-selected="false" type="button">
+          <span>Nhật ký</span>
+        </button>
+        <button class="tab-button" data-tab="settings" aria-selected="false" type="button">
+          <span>Cài đặt</span>
+        </button>
+      </nav>
+
+      <div class="tab-content">
+        <section id="tab-create" class="tab-panel active">
+          <section class="card create-card">
+            <div class="section-heading">
+              <div>
+                <span class="eyebrow">Nội dung</span>
+                <h2>Tạo ảnh hàng loạt</h2>
+              </div>
+              <span id="promptCount" class="state">0 prompt</span>
+            </div>
+            <p class="muted">Mỗi dòng là một prompt. Prompt tổng sẽ tự tạo và điền các line bên dưới theo thứ tự.</p>
+
+            <div class="field-head">
+              <label for="bulkPrompts">Prompt hàng loạt</label>
+              <button id="importPrompts" class="text-button" type="button">Nhập TXT</button>
+              <input id="promptFileInput" type="file" accept=".txt,text/plain" hidden>
+            </div>
+            <textarea id="bulkPrompts" rows="9" placeholder="Prompt thứ nhất...
+
+Prompt thứ hai..."></textarea>
+
+            <div class="form-grid">
+              <label for="aspectRatio">Tỷ lệ ảnh
+                <select id="aspectRatio">
+                  <option value="9:16">9:16</option>
+                  <option value="1:1">1:1</option>
+                  <option value="16:9">16:9</option>
+                </select>
+              </label>
+              <label for="outputPrefix">Tên file
+                <input id="outputPrefix" value="gemini-image" autocomplete="off">
+              </label>
+            </div>
+
+            <label class="file-drop" for="referenceInput">
+              <span>＋ Nạp ảnh chính cho các line</span>
+              <small>Chọn nhiều ảnh · mỗi ảnh được ghép vào một line</small>
+              <input id="referenceInput" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
+            </label>
+            <ol id="referenceList" class="reference-list"></ol>
+            <button id="addPromptLine" class="button secondary full-width compact-button" type="button">＋ Thêm line trống</button>
+            <p id="referenceHint" class="muted">Mỗi line có một prompt và tối đa 5 ảnh ref được upload đúng thứ tự.</p>
+
+            <div class="create-actions">
+              <button id="addToQueue" class="button secondary" type="button">＋ Thêm vào hàng chờ</button>
+              <button id="addAndRun" class="button primary" type="button">Thêm và chạy <span>→</span></button>
+            </div>
+          </section>
+
+          <section id="activeRunCard" class="card active-run">
+            <div class="section-heading">
+              <div>
+                <span class="eyebrow">Đang xử lý</span>
+                <h2 id="activeTaskTitle">Chưa có tác vụ</h2>
+              </div>
+              <span id="activeTaskState" class="state">idle</span>
+            </div>
+            <div class="progress-track"><div id="progressBar"></div></div>
+            <p id="activeTaskDetail" class="muted">Thêm prompt vào hàng chờ để bắt đầu.</p>
+            <div class="runner-controls">
+              <button id="startQueueCreate" class="button primary" type="button">Chạy hàng chờ <span>→</span></button>
+              <button id="pauseQueueCreate" class="button secondary" type="button" disabled>Tạm dừng</button>
+              <button id="stopQueueCreate" class="button danger" type="button" disabled>Dừng</button>
+            </div>
+          </section>
+        </section>
+
+        <section id="tab-queue" class="tab-panel">
+          <section class="page-heading">
+            <div>
+              <span class="eyebrow">Trình thực thi</span>
+              <h2>Hàng chờ tuần tự</h2>
+              <p>Mỗi lần chỉ tạo một ảnh. Trạng thái được lưu để có thể tiếp tục sau khi mở lại extension.</p>
+            </div>
+          </section>
+
+          <section class="queue-summary">
+            <div><strong id="queuePendingCount">0</strong><span>Đang chờ</span></div>
+            <div><strong id="queueCompletedCount">0</strong><span>Hoàn tất</span></div>
+            <div><strong id="queueFailedCount">0</strong><span>Lỗi</span></div>
+          </section>
+
+          <div class="queue-toolbar">
+            <button id="startQueue" class="button primary" type="button">Bắt đầu hàng chờ</button>
+            <button id="pauseQueue" class="button secondary" type="button" disabled>Tạm dừng</button>
+            <button id="stopQueue" class="button danger" type="button" disabled>Dừng</button>
+          </div>
+          <div id="queueList" class="queue-list"></div>
+          <div class="queue-footer">
+            <button id="retryFailed" class="button secondary" type="button">Thử lại tác vụ lỗi</button>
+            <button id="clearFinished" class="button secondary" type="button">Xóa tác vụ đã xong</button>
+            <button id="clearQueue" class="button danger" type="button">Xóa toàn bộ</button>
+          </div>
+        </section>
+
+        <section id="tab-logs" class="tab-panel">
+          <section class="page-heading with-actions">
+            <div>
+              <span class="eyebrow">Chẩn đoán</span>
+              <h2>Nhật ký theo phiên</h2>
+              <p>Mỗi lần tạo ảnh là một phiên riêng. Phiên đang chạy tự mở và không làm mất vị trí cuộn.</p>
+            </div>
+            <button id="copyLatestSession" class="button secondary" type="button">Copy phiên mới nhất</button>
+          </section>
+          <div id="sessionLogs" class="session-logs">
+            <div class="empty-state">Chưa có phiên chạy nào.</div>
+          </div>
+          <button id="clearLogs" class="button danger full-width" type="button">Xóa nhật ký</button>
+        </section>
+
+        <section id="tab-settings" class="tab-panel">
+          <section class="card">
+            <div class="section-heading">
+              <div>
+                <span class="eyebrow">Automation</span>
+                <h2>Cấu hình chạy</h2>
+              </div>
+            </div>
+            <div class="form-grid">
+              <label for="timeoutMinutes">Chờ kết quả tối đa
+                <input id="timeoutMinutes" type="number" min="2" max="30" step="1">
+                <small>phút</small>
+              </label>
+              <label for="delaySeconds">Nghỉ giữa hai prompt
+                <input id="delaySeconds" type="number" min="0" max="120" step="1">
+                <small>giây</small>
+              </label>
+            </div>
+            <label class="check-row">
+              <input id="autoDownload" type="checkbox">
+              <span>Tự động tải ảnh sau khi thu thập xong</span>
+            </label>
+            <label for="downloadMode">Chế độ tải
+              <select id="downloadMode">
+                <option value="auto">Tự lưu</option>
+                <option value="ask">Hỏi nơi lưu mỗi file</option>
+              </select>
+            </label>
+            <label for="downloadFolder">Thư mục con trong Downloads
+              <input id="downloadFolder" value="Auto Gemini Images">
+            </label>
+            <p class="muted">Chọn <strong>Tự lưu</strong> để service worker tạo và ép thư mục này. Với “Hỏi nơi lưu”, hộp Save As của Chrome cho phép đổi sang vị trí khác.</p>
+            <div class="settings-actions">
+              <button id="saveRunnerSettings" class="button primary" type="button">Lưu cài đặt</button>
+              <button id="openDownloadSettings" class="button secondary" type="button">Mở cài đặt tải của Chrome</button>
+            </div>
+          </section>
+
+          <details class="card integration-card">
+            <summary>Kết nối VOX <span>tùy chọn</span></summary>
+            <p class="muted">VOX sẽ cấu hình tự động khi dùng “Generate with Gemini”. Các ô này chỉ dành cho khôi phục thủ công.</p>
+            <label for="voxBaseUrl">VOX API URL
+              <input id="voxBaseUrl" type="url" placeholder="http://127.0.0.1:4174">
+            </label>
+            <label for="apiToken">API token
+              <input id="apiToken" type="password" autocomplete="off">
+            </label>
+            <button id="saveVoxSettings" class="button secondary" type="button">Lưu kết nối VOX</button>
+            <label for="batchId">Batch ID
+              <input id="batchId" placeholder="VOX batch ID">
+            </label>
+            <button id="startVoxBatch" class="button secondary" type="button">Chạy VOX batch</button>
+            <p id="voxRuntimeStatus" class="muted">Chưa tải trạng thái VOX.</p>
+          </details>
+        </section>
+      </div>
+    </main>
+
+    <div id="toast" role="status" aria-live="polite"></div>
+    <script type="module" src="sidepanel.js"></script>
+  </body>
+</html>

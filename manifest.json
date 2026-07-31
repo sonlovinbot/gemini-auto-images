@@ -1,0 +1,51 @@
+{
+  "manifest_version": 3,
+  "name": "Auto Gemini Images",
+  "version": "0.7.1",
+  "description": "Runs durable image-generation batches through your logged-in Gemini tab.",
+  "minimum_chrome_version": "116",
+  "permissions": [
+    "alarms",
+    "downloads",
+    "scripting",
+    "sidePanel",
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://gemini.google.com/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Open Auto Gemini Images"
+  },
+  "side_panel": {
+    "default_path": "sidepanel/sidepanel.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://gemini.google.com/*"],
+      "js": ["content/gemini.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "http://localhost/*",
+        "http://127.0.0.1/*"
+      ],
+      "js": ["content/vox-bridge.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["config/gemini-selectors.json"],
+      "matches": ["https://gemini.google.com/*"]
+    }
+  ]
+}
