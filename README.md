@@ -1,148 +1,158 @@
 # Auto Gemini Images
 
-> Gemini migration: version 0.7.1 targets `https://gemini.google.com/app`.
-> Existing `vox-chatgpt/1` message names and storage keys remain unchanged for
-> backward compatibility with deployed VOX clients and saved queues.
+> Phiên bản hiện tại: **0.8.8** · Hoạt động trên `https://gemini.google.com/app` · Yêu cầu Chrome 116 trở lên.
 
-A Manifest V3 Chrome extension that executes image-generation jobs through the
-user's logged-in Gemini tab.
+Auto Gemini Images là extension Chrome Manifest V3 giúp chạy tuần tự nhiều yêu cầu tạo ảnh bằng tài khoản Gemini đang đăng nhập trên trình duyệt. Extension hỗ trợ prompt độc lập, ảnh tham chiếu, hàng chờ bền vững, tải kết quả và nhật ký chẩn đoán theo từng phiên.
 
-## Current status — v0.6.5
+## Tính năng chính
 
-The extension now supports a standalone Gemini workflow without VOX:
+- Nhập nhiều prompt và chạy lần lượt trong Gemini.
+- Gắn từ 0 đến 5 ảnh tham chiếu theo đúng thứ tự cho từng prompt.
+- Tự bật chế độ **Create image**, nạp ảnh, nhập prompt và xác nhận Gemini đã nhận đủ nội dung trước khi theo dõi kết quả.
+- Tạm dừng, tiếp tục, dừng, thử lại hoặc xóa từng tác vụ trong hàng chờ.
+- Giữ hàng chờ, ảnh tham chiếu, kết quả và nhật ký khi đóng rồi mở lại side panel.
+- Tự phục hồi việc theo dõi nếu side panel bị reload sau khi prompt đã được gửi, không gửi lại prompt lần hai.
+- Tải ảnh thủ công hoặc tự động vào thư mục con trong Downloads.
+- Tích hợp tùy chọn với ứng dụng storyboard chạy tại `localhost` hoặc `127.0.0.1`.
 
-- Four side-panel tabs: **Create**, **Queue**, **Logs**, and **Settings**.
-- Bulk prompt parsing. A blank line separates multi-line prompts; without blank
-  lines, each non-empty line is a prompt.
-- Prompt lines containing an editable prompt and zero to five ordered reference
-  images. Compact layered thumbnails provide move-left, move-right, remove, and
-  add-more controls without making the side panel excessively wide.
-- Bulk prompts automatically create and fill prompt lines from top to bottom.
-  Selecting multiple main images maps one image to each line; each line can
-  then receive additional reference images through its own **+ Ref** control.
-- Sequential Gemini execution with pause, resume, stop, retry, and queue
-  prioritization. The active task and newest queued tasks stay above completed
-  work, while failed and canceled tasks move to the bottom.
-- Draft references, queued references, queue metadata, results, and diagnostic
-  sessions survive reopening the side panel.
-- Reference bytes are decoded locally in Gemini's MAIN world rather than
-  fetched through the page CSP. Images are then sent one at a time through the
-  composer-owned `#upload-files` input. Every image must produce a visible
-  ready signal before its prompt can be submitted.
-- A baseline is recorded before every submission. Gemini images are identified
-  by their stable Estuary file ID rather than expiring `ts`/`sig` URL
-  parameters, and candidates must belong to an assistant turn created after
-  submission. A fully loaded candidate is accepted after remaining unchanged
-  for several scans even if Gemini's global Stop button remains visible. The
-  scanner then retrieves only the stable authenticated result bytes.
-- Completed images can be downloaded manually or automatically into a
-  configured Downloads subfolder. Like the Isfahan reference, a service-worker
-  download manager reinforces the requested path through
-  `onDeterminingFilename`; the runner waits for Chrome to confirm completion and
-  verifies the actual folder suffix.
-- Every generation has an expandable session log and its own **Copy** button.
-- If the side panel reloads after a prompt was submitted, recovery resumes the
-  scanner in the original Gemini conversation and does not submit the prompt
-  again.
-- If the Gemini DOM remains unchanged for 60 scans, the runner opens the saved
-  conversation URL in one fresh tab and moves the scanner there without
-  submitting again. Each task performs this automatic tab recovery at most
-  once.
+## Yêu cầu trước khi cài
 
-The local VOX bridge now reuses that same proven side-panel executor:
+- Google Chrome phiên bản 116 trở lên.
+- Đã đăng nhập tài khoản tại [Gemini](https://gemini.google.com/app).
+- Thư mục mã nguồn đã được giải nén đầy đủ. Không chọn trực tiếp file ZIP khi dùng **Load unpacked**.
 
-- VOX checks that the extension is installed before creating a batch.
-- A click-time preflight opens the side panel before VOX performs asynchronous
-  batch work, preserving Chrome's required user gesture.
-- Reloading the unpacked extension automatically re-injects the VOX bridge into
-  already open local VOX tabs and replaces stale bridge listeners whose
-  `chrome.runtime` context was invalidated.
-- `START_CHATGPT_BATCH` opens a new Gemini tab by default and
-  imports each non-terminal VOX task into the durable extension queue exactly
-  once.
-- VOX can choose automatic execution or manual intake. Manual intake resets the
-  previous VOX workspace, fills the **Create** prompt lines and ordered
-  references, preserves task/beat identity, and waits for the user to click
-  **Add and run**.
-- VOX task order and the order of every task's references are preserved.
-- Reconnecting an unfinished VOX batch requeues matching local failed or
-  canceled items when VOX still has no completed result. Existing task IDs are
-  reused, so missing beats resume without creating duplicate remote tasks.
-- Failed tasks show a prominent recovery banner with a shortcut back to VOX.
-  Every explicit retry is tagged to open a fresh Gemini New Chat immediately
-  before submission, so a stuck older Gemini tab is never reused.
-- Each task is claimed from VOX before Gemini automation begins. A claim for a
-  different task is rejected instead of silently mixing beats.
-- Progress and waiting heartbeats are returned to VOX while Gemini is working.
-- Generated bytes are stored locally before result delivery. The extension
-  marks a task completed only after VOX confirms the multipart result save.
-- If result delivery is interrupted, retry sends the already collected bytes
-  again through the idempotent VOX endpoint and does not submit Gemini twice.
-- The legacy background/content-script executor is not run in parallel for
-  side-panel-owned VOX batches.
+## Cài đặt bằng Chrome Developer Mode
 
-The repository also retains the VOX integration foundation:
+1. Tải hoặc clone repository này về máy.
+2. Mở Chrome và truy cập `chrome://extensions`.
+3. Bật công tắc **Developer mode / Chế độ dành cho nhà phát triển** ở góc trên bên phải.
+4. Bấm **Load unpacked / Tải tiện ích đã giải nén**.
+5. Chọn đúng thư mục gốc `auto-gemini-images` — thư mục này phải chứa file `manifest.json`.
+6. Kiểm tra thẻ extension hiển thị tên **Auto Gemini Images** và phiên bản **0.8.8**.
+7. Mở `https://gemini.google.com/app`, đăng nhập nếu cần.
+8. Bấm biểu tượng extension trên thanh công cụ Chrome để mở side panel. Nếu chưa thấy biểu tượng, mở menu Extensions hình mảnh ghép và ghim **Auto Gemini Images**.
 
-- Side-panel-owned automation session using MAIN-world script injection,
-  following the proven execution architecture of the read-only Isfahan Auto
-  Flow reference extension.
-- Versioned `vox-chatgpt/1` application adapter.
-- Durable runtime checkpoints in `chrome.storage.local`.
-- Sequential task state machine.
-- Dedicated Gemini tab/conversation setup per batch.
-- Ordered reference upload and visible upload verification.
-- Pre-submission message/image baseline.
-- Exactly-once submission guard and ambiguity detection.
-- New assistant-image detection and highest-resolution selection.
-- Image-byte return to VOX with checksum and idempotency metadata.
-- Fake Gemini result-detection tests.
+### Cập nhật bản mã nguồn mới
 
-The VOX endpoints described in `docs/product-brief.md` must be available before an end-to-end batch can run.
+1. Thay thế hoặc pull mã nguồn mới nhất.
+2. Mở `chrome://extensions`.
+3. Bấm **Reload / Tải lại** trên thẻ **Auto Gemini Images**.
+4. Reload riêng tab Gemini và trang storyboard đang mở.
+5. Đóng rồi mở lại side panel.
+6. Chạy một tác vụ mới và kiểm tra dòng đầu nhật ký có dạng `Extension 0.8.8`.
 
-## Install for development
+Nếu nhật ký vẫn hiển thị phiên bản cũ, Chrome vẫn đang chạy một bản extension khác. Hãy tắt hoặc xóa bản cũ, sau đó load lại đúng thư mục mã nguồn.
 
-1. Open `chrome://extensions`.
-2. Enable **Developer mode**.
-3. Click **Load unpacked**.
-4. Select this repository folder.
-5. Click the extension icon to open the side panel.
-6. After a code update, click **Reload** on the Auto Gemini Images card.
-7. Open an existing `gemini.google.com` tab, then close and reopen the side panel.
+## Tạo ảnh trực tiếp bằng extension
 
-## Standalone usage
+1. Mở Gemini và side panel **Auto Gemini Images**.
+2. Tại tab **Tạo ảnh hàng loạt**, nhập một hoặc nhiều prompt.
+   - Nếu có dòng trống giữa các đoạn, mỗi đoạn là một prompt.
+   - Nếu không có dòng trống, mỗi dòng không rỗng là một prompt.
+3. Chọn tỉ lệ ảnh cho từng dòng prompt.
+4. Thêm tối đa 5 ảnh tham chiếu bằng nút **+ Ref**. Có thể đổi thứ tự hoặc xóa ảnh trước khi chạy.
+5. Bấm **Thêm vào hàng chờ** để chuẩn bị, hoặc **Thêm và chạy** để bắt đầu ngay.
+6. Theo dõi trạng thái tại tab **Hàng chờ**.
+7. Mở tab **Nhật ký** nếu cần xem hoặc sao chép chẩn đoán của từng phiên.
 
-1. Open Gemini and the extension side panel.
-2. In **Create**, paste one or more prompts.
-3. Optionally select multiple main images. Image 1 maps to line 1, image 2 to
-   line 2, and so on.
-4. Add up to five ordered references to any line with **+ Ref**, then check or
-   edit the prompt beside that stack. The bulk prompt field creates and fills
-   these lines automatically from top to bottom.
-5. Click **Add to queue** or **Add and run**.
-6. Use **Queue** to pause, resume, stop, retry, or download individual results.
-   Active/new work is shown first and failed/old work is shown last.
-7. Use **Logs** to expand a generation session or copy its complete diagnostics
-   in one click.
-8. Use **Settings** to configure timeout, delay, automatic download behavior,
-   and the destination subfolder. **Auto save** is the reliable folder mode;
-   Chrome's **Save As** dialog always lets the user override the folder.
+Extension xử lý từng tác vụ tuần tự. Chỉ khi ảnh của tác vụ hiện tại được thu thập và lưu thành công, tác vụ kế tiếp mới bắt đầu.
 
-For local VOX, reload both the extension and the VOX page, then click
-**Generate with Gemini** in the storyboard. VOX first verifies the bridge,
-creates the batch, opens the extension side panel and Gemini, and sends the
-batch into the same sequential queue used by standalone mode.
+## Sử dụng ảnh tham chiếu
 
-The extension automatically uses `http://127.0.0.1:4174` for local VOX development. No API token is required locally. The manual URL, token, and batch-ID fields are recovery controls for remote or disconnected setups.
+Ảnh được nạp qua vùng soạn thảo thật của Gemini và phải xuất hiện ở trạng thái sẵn sàng trước khi extension nhập và gửi prompt. Sau khi bấm gửi, extension tiếp tục xác nhận lượt chat mới chứa cả prompt và ảnh tham chiếu.
 
-## Development
+Nếu lần bấm **Send** đầu tiên không tạo lượt chat mới nhưng prompt và ảnh vẫn còn nguyên trong ô soạn, extension 0.8.8 sẽ thử lại nút gửi đúng một lần. Cơ chế này giúp hàng chờ tiếp tục mà không gửi trùng một prompt đã được Gemini tiếp nhận.
+
+## Quản lý hàng chờ
+
+- **Bắt đầu hàng chờ:** chạy các tác vụ đang chờ theo thứ tự.
+- **Tạm dừng:** dừng tại ranh giới an toàn, không cắt ngang thao tác đang ghi dữ liệu.
+- **Tiếp tục:** tiếp tục từ tác vụ chưa hoàn tất.
+- **Dừng:** ngừng runner hiện tại.
+- **Thử lại:** chạy lại tác vụ lỗi trong một New Chat mới để không tái sử dụng draft Gemini bị kẹt.
+- **Xóa:** xóa tác vụ khỏi hàng chờ cục bộ.
+
+## Tải và lưu ảnh
+
+Trong tab **Cài đặt**, có thể cấu hình:
+
+- Thời gian chờ Gemini tạo ảnh.
+- Khoảng nghỉ giữa các tác vụ.
+- Tự động tải kết quả.
+- Thư mục con bên trong Downloads.
+
+Chế độ tự động lưu là cách ổn định nhất để giữ đúng thư mục đích. Nếu Chrome bật hộp thoại **Save As**, người dùng vẫn có thể thay đổi đường dẫn thủ công.
+
+## Tích hợp storyboard cục bộ
+
+Extension có bridge riêng theo giao thức `vox-gemini/2`, vì vậy có thể cài đồng thời với Auto ChatGPT Images. Dữ liệu batch bền vững vẫn dùng hợp đồng `vox-chatgpt/1` để tương thích với ứng dụng hiện tại.
+
+Quy trình sử dụng:
+
+1. Chạy ứng dụng storyboard tại `localhost` hoặc `127.0.0.1`.
+2. Reload extension, trang storyboard và tab Gemini sau mỗi lần cập nhật mã nguồn.
+3. Tại storyboard, bấm **Generate with Gemini**.
+4. Extension nhận prompt, tỉ lệ, ảnh tham chiếu và thứ tự tác vụ vào cùng hàng chờ tuần tự.
+5. Khi lấy được bytes ảnh, extension chỉ đánh dấu hoàn tất sau khi storyboard xác nhận đã lưu kết quả.
+
+Môi trường phát triển cục bộ mặc định sử dụng `http://127.0.0.1:4174` và không yêu cầu API token. URL, token và batch ID thủ công trong phần cài đặt chỉ dành cho phục hồi hoặc môi trường kết nối khác.
+
+## Xử lý lỗi thường gặp
+
+### Extension không được phát hiện trên trang storyboard
+
+- Kiểm tra extension đang bật trong `chrome://extensions`.
+- Bấm **Reload** trên thẻ extension.
+- Reload riêng trang storyboard để bridge mới được nạp.
+- Đóng rồi mở lại side panel.
+
+### Chỉ nhập prompt nhưng không gửi ảnh
+
+- Xác nhận đang dùng phiên bản 0.8.8 trong dòng `session_start`.
+- Xóa hoặc thử lại tác vụ lỗi để extension mở New Chat sạch.
+- Không thao tác thủ công vào ô soạn trong lúc tác vụ đang ở giai đoạn nạp ảnh hoặc gửi prompt.
+
+### `SUBMISSION_AMBIGUOUS`
+
+Extension không chứng minh được Gemini đã nhận đầy đủ prompt và ảnh. Từ bản 0.8.8, extension nhận diện nội dung thật của lượt người dùng, bỏ qua nhãn hỗ trợ truy cập như “You said”, đồng thời thử lại Send một lần nếu lần đầu chắc chắn chưa gửi.
+
+### `UPLOAD_VERIFICATION_FAILED`
+
+Gemini không hiển thị ảnh tham chiếu ở trạng thái sẵn sàng trong thời gian cho phép. Kiểm tra định dạng và kích thước ảnh, kết nối mạng, sau đó thử lại trong New Chat.
+
+### `RESULT_FETCH_FAILED`
+
+Gemini đã tạo ảnh nhưng trình duyệt không cung cấp bytes đọc được. Extension lần lượt thử canvas, fetch blob và luồng tải ảnh kích thước đầy đủ. Hãy sao chép toàn bộ nhật ký phiên nếu lỗi vẫn lặp lại.
+
+## Phát triển và kiểm tra
+
+Cài dependencies rồi chạy:
 
 ```bash
-npm test
+npm install
 npm run check
+npm test
 ```
 
-DOM selectors and visible labels live in `config/gemini-selectors.json`. Automation code should call semantic page operations rather than embed selectors in orchestration logic.
+Đóng gói bản phát hành Chrome Web Store:
 
-## Safety
+```bash
+npm run package
+```
 
-The extension does not bypass Gemini login, verification, safety, or usage limits. Those states are reported as explicit errors requiring user action.
+File ZIP được tạo trong thư mục `dist/` theo phiên bản trong `manifest.json`, ví dụ:
+
+```text
+dist/auto-gemini-images-0.8.8.zip
+```
+
+Các selector và nhãn giao diện Gemini nằm tại `config/gemini-selectors.json`. Mã điều phối nên sử dụng các selector này thay vì chèn selector rời rạc vào nhiều nơi.
+
+## Quyền riêng tư và an toàn
+
+- Extension chỉ thao tác trên tab Gemini đang đăng nhập và các trang phát triển cục bộ được khai báo trong manifest.
+- Prompt, ảnh tham chiếu, hàng chờ và kết quả được lưu cục bộ để phục hồi công việc.
+- Extension không vượt qua đăng nhập, xác minh tài khoản, CAPTCHA, giới hạn sử dụng hoặc chính sách an toàn của Gemini.
+- Các trạng thái cần người dùng xử lý sẽ được ghi thành lỗi rõ ràng trong nhật ký.
+
+Xem thêm [Chính sách quyền riêng tư](docs/privacy-policy.md) và [Tài liệu sản phẩm](docs/product-brief.md).

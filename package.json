@@ -1,10 +1,11 @@
 {
   "name": "auto-gemini-images",
-  "version": "0.7.1",
+  "version": "0.8.8",
   "private": true,
   "type": "module",
   "scripts": {
     "test": "node --test",
-    "check": "node --check background.js && node --check src/blob-store.js && node --check src/prompt-parser.js && node --check src/result-stability.js && node --check content/gemini.js && node --check content/vox-bridge.js && node --check sidepanel/gemini-executor.js && node --check sidepanel/sidepanel.js"
+    "check": "node --check background.js && node --check src/blob-store.js && node --check src/prompt-parser.js && node --check src/result-stability.js && node --check content/gemini.js && node --check content/vox-bridge.js && node --check sidepanel/gemini-executor.js && node --check sidepanel/sidepanel.js",
+    "package": "node scripts/package.mjs"
   }
 }

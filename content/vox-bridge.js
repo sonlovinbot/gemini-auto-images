@@ -1,8 +1,8 @@
 (() => {
   const REQUEST_SOURCE = "vox-style-video";
-  const RESPONSE_SOURCE = "auto-chatgpt-images";
-  const PROTOCOL = "vox-chatgpt/1";
-  const BRIDGE_STATE_KEY = "__autoChatGPTImagesVoxBridgeV1";
+  const RESPONSE_SOURCE = "auto-gemini-images";
+  const PROTOCOL = "vox-gemini/2";
+  const BRIDGE_STATE_KEY = "__autoGeminiImagesVoxBridgeV2";
 
   function isTrustedLocalPage() {
     return (
@@ -49,24 +49,25 @@
       message?.source !== REQUEST_SOURCE ||
       message?.protocol !== PROTOCOL ||
       ![
-        "CHECK_EXTENSION",
-        "OPEN_CHATGPT_EXTENSION",
-        "START_CHATGPT_BATCH"
+        "CHECK_GEMINI_EXTENSION",
+        "OPEN_GEMINI_EXTENSION",
+        "START_GEMINI_BATCH"
       ].includes(message?.type)
     ) {
       return;
     }
-    // This capture-phase listener owns the VOX protocol. Stopping propagation
-    // prevents anonymous listeners left by an invalidated unpacked-extension
-    // context from throwing before the current bridge can answer.
+    // An unpacked-extension reload leaves the old listener attached to the VOX
+    // document, but its chrome.runtime is invalid. It must yield so the freshly
+    // injected listener can own the request.
+    const runtime = extensionRuntime();
+    if (!runtime) return;
     event.stopImmediatePropagation();
 
     const requestId = String(message.requestId || "");
-    if (message.type === "CHECK_EXTENSION") {
+    if (message.type === "CHECK_GEMINI_EXTENSION") {
       if (!requestId) return;
-      const runtime = extensionRuntime();
-      if (!runtime || typeof runtime.getManifest !== "function") {
-        respond("CHECK_EXTENSION_RESULT", requestId, {
+      if (typeof runtime.getManifest !== "function") {
+        respond("CHECK_GEMINI_EXTENSION_RESULT", requestId, {
           ok: false,
           code: "EXTENSION_CONTEXT_INVALIDATED",
           error:
@@ -74,7 +75,7 @@
         });
         return;
       }
-      respond("CHECK_EXTENSION_RESULT", requestId, {
+      respond("CHECK_GEMINI_EXTENSION_RESULT", requestId, {
         ok: true,
         data: {
           installed: true,
@@ -86,28 +87,21 @@
       return;
     }
 
-    if (message.type === "OPEN_CHATGPT_EXTENSION") {
+    if (message.type === "OPEN_GEMINI_EXTENSION") {
       if (!requestId) return;
       try {
-        const runtime = extensionRuntime();
-        if (!runtime) {
-          throw Object.assign(
-            new Error("Extension bridge context is unavailable."),
-            { code: "EXTENSION_CONTEXT_INVALIDATED" },
-          );
-        }
         const response = await runtime.sendMessage({
           scope: "auto-gemini-images:background",
           type: "OPEN_SIDE_PANEL"
         });
-        respond("OPEN_CHATGPT_EXTENSION_RESULT", requestId, {
+        respond("OPEN_GEMINI_EXTENSION_RESULT", requestId, {
           ok: Boolean(response?.ok),
           data: response?.data || { opened: false },
           error: response?.error?.message || "",
           code: response?.error?.code || "",
         });
       } catch (error) {
-        respond("OPEN_CHATGPT_EXTENSION_RESULT", requestId, {
+        respond("OPEN_GEMINI_EXTENSION_RESULT", requestId, {
           ok: false,
           error: error?.message || String(error),
           code: error?.code || "OPEN_SIDE_PANEL_FAILED",
@@ -119,7 +113,7 @@
     const batchId = String(message.batchId || "").trim();
     const voxBaseUrl = String(message.voxBaseUrl || "").trim();
     if (!requestId || !batchId || !/^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/i.test(voxBaseUrl)) {
-      respond("START_CHATGPT_BATCH_RESULT", requestId, {
+      respond("START_GEMINI_BATCH_RESULT", requestId, {
         ok: false,
         error: "Invalid local VOX bridge request.",
         code: "INVALID_VOX_BRIDGE_REQUEST",
@@ -128,15 +122,6 @@
     }
 
     try {
-      const runtime = extensionRuntime();
-      if (!runtime) {
-        throw Object.assign(
-          new Error(
-            "Extension bridge context is unavailable. Try Generate with ChatGPT again.",
-          ),
-          { code: "EXTENSION_CONTEXT_INVALIDATED" },
-        );
-      }
       const response = await runtime.sendMessage({
         scope: "auto-gemini-images:background",
         type: "START_BATCH",
@@ -147,13 +132,13 @@
         openNewChat: message.openNewChat !== false,
         resetWorkspace: message.resetWorkspace !== false
       });
-      respond("START_CHATGPT_BATCH_RESULT", requestId, {
+      respond("START_GEMINI_BATCH_RESULT", requestId, {
         ok: Boolean(response?.ok),
         error: response?.error?.message || "",
         code: response?.error?.code || "",
       });
     } catch (error) {
-      respond("START_CHATGPT_BATCH_RESULT", requestId, {
+      respond("START_GEMINI_BATCH_RESULT", requestId, {
         ok: false,
         error: error?.message || String(error),
         code: error?.code || "START_BATCH_FAILED",

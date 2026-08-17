@@ -4,18 +4,22 @@
   "selectors": {
     "composer": "rich-textarea .ql-editor[contenteditable='true'], div.ql-editor[role='textbox'][contenteditable='true']",
     "fileInput": "input[type='file']",
+    "fileDropZone": "[file-drop-zone], .xap-uploader-dropzone",
     "attachmentButton": "button[aria-label='Upload & tools'], button[aria-label*='Upload']",
     "uploadFilesMenuItem": "[role='menuitem']",
     "createImageMenuItem": "[role='menuitemcheckbox']",
+    "imageModeEnabled": "button[aria-label='Deselect Images']",
     "sendButton": "button[aria-label='Send message'], button[aria-label='Send'], button.send-button",
     "stopButton": "button[aria-label*='Stop response'], button[aria-label='Stop']",
     "conversationArticle": "main user-query, main model-response",
     "conversationTurn": "main user-query, main model-response",
     "assistantMessage": "main model-response",
     "userMessage": "main user-query",
+    "submittedAttachment": "img, [class*='attachment'], [data-test-id*='attachment'], gem-media-attachment",
     "generatedImage": "main model-response img[src^='blob:'], main model-response img[src^='data:'], main model-response img[src*='googleusercontent.com'], main model-response img[src*='ggpht.com']",
     "image": "img",
-    "attachment": "rich-textarea img, [class*='attachment'] img, [class*='file-preview'], [class*='uploaded']",
+    "attachment": "img.gem-attachment-style-img[alt='attachment'], img[alt='attachment']",
+    "attachmentClose": "button[aria-label='close attachment'], button[aria-label='Close attachment'], button[aria-label*='Remove attachment']",
     "uploadBusy": "[aria-busy='true'], mat-progress-spinner, [class*='upload'][class*='loading']"
   },
   "labels": {

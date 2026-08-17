@@ -53,7 +53,7 @@ async function request(bridge, type, requestId = "request-1") {
     origin: bridge.location.origin,
     data: {
       source: "vox-style-video",
-      protocol: "vox-chatgpt/1",
+      protocol: "vox-gemini/2",
       type,
       requestId,
     },
@@ -67,13 +67,11 @@ async function request(bridge, type, requestId = "request-1") {
   };
 }
 
-test("stale VOX bridge reports an invalidated extension context without throwing", async () => {
+test("stale VOX bridge yields to the freshly injected listener", async () => {
   const bridge = createBridge(undefined);
-  const result = await request(bridge, "CHECK_EXTENSION");
-  assert.equal(result.stopped, true);
-  assert.equal(result.response.type, "CHECK_EXTENSION_RESULT");
-  assert.equal(result.response.ok, false);
-  assert.equal(result.response.code, "EXTENSION_CONTEXT_INVALIDATED");
+  const result = await request(bridge, "CHECK_GEMINI_EXTENSION");
+  assert.equal(result.stopped, false);
+  assert.equal(result.response.type, "VOX_BRIDGE_READY");
 });
 
 test("current VOX bridge returns its loaded extension version", async () => {
@@ -82,7 +80,7 @@ test("current VOX bridge returns its loaded extension version", async () => {
     getManifest: () => ({ version: "0.6.1" }),
     sendMessage: async () => ({ ok: true }),
   });
-  const result = await request(bridge, "CHECK_EXTENSION");
+  const result = await request(bridge, "CHECK_GEMINI_EXTENSION");
   assert.equal(result.response.ok, true);
   assert.equal(result.response.data.extensionVersion, "0.6.1");
 });

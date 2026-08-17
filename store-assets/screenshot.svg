@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="800" viewBox="0 0 1280 800">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1280" y2="800"><stop stop-color="#EAF0EB"/><stop offset="1" stop-color="#D8E4DD"/></linearGradient>
+    <linearGradient id="art" x1="145" y1="210" x2="770" y2="620"><stop stop-color="#A9D5C0"/><stop offset=".5" stop-color="#587A70"/><stop offset="1" stop-color="#182A25"/></linearGradient>
+    <linearGradient id="lime" x1="892" y1="184" x2="1160" y2="184"><stop stop-color="#D8FF73"/><stop offset="1" stop-color="#91E8A9"/></linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="18" stdDeviation="28" flood-opacity=".18"/></filter>
+  </defs>
+  <rect width="1280" height="800" fill="url(#bg)"/>
+  <rect x="42" y="42" width="1196" height="716" rx="24" fill="#F8FAF8" filter="url(#shadow)"/>
+  <rect x="42" y="42" width="1196" height="58" rx="24" fill="#FFFFFF"/>
+  <circle cx="78" cy="71" r="7" fill="#FF746C"/><circle cx="102" cy="71" r="7" fill="#F5C85B"/><circle cx="126" cy="71" r="7" fill="#63C77B"/>
+  <rect x="170" y="59" width="510" height="26" rx="13" fill="#EEF1EE"/><text x="190" y="78" font-family="Arial,sans-serif" font-size="15" fill="#6B746F">gemini.google.com/app</text>
+  <rect x="42" y="100" width="790" height="658" fill="#F5F7F5"/>
+  <text x="92" y="157" font-family="Arial,sans-serif" font-size="26" font-weight="700" fill="#18201C">Gemini image workspace</text>
+  <rect x="92" y="186" width="690" height="414" rx="28" fill="url(#art)"/>
+  <circle cx="266" cy="346" r="82" fill="#CBE9D9" opacity=".72"/><path d="M114 536l166-164 108 95 142-176 230 245Z" fill="#253E36" opacity=".9"/>
+  <path d="M655 218c7 38 24 55 62 62-38 7-55 24-62 62-7-38-24-55-62-62 38-7 55-24 62-62Z" fill="#E8FFAB"/>
+  <rect x="132" y="630" width="610" height="80" rx="28" fill="#FFFFFF" stroke="#DDE3DF"/>
+  <text x="164" y="665" font-family="Arial,sans-serif" font-size="16" fill="#49534D">A calm architectural scene at blue hour…</text>
+  <rect x="637" y="648" width="78" height="42" rx="21" fill="#17241F"/><path d="M668 660l18 9-18 9Z" fill="#D8FF73"/>
+  <rect x="832" y="100" width="406" height="658" fill="#101612"/>
+  <text x="870" y="150" font-family="Arial,sans-serif" font-size="22" font-weight="700" fill="#F4F8F5">Auto Gemini Images</text>
+  <text x="870" y="183" font-family="Arial,sans-serif" font-size="13" fill="#92A098">TẠO  ·  HÀNG CHỜ  ·  NHẬT KÝ</text>
+  <rect x="868" y="211" width="334" height="146" rx="18" fill="#18211C" stroke="#334239"/>
+  <text x="892" y="246" font-family="Arial,sans-serif" font-size="13" font-weight="700" fill="#D8FF73">PROMPT 01</text>
+  <text x="892" y="278" font-family="Arial,sans-serif" font-size="15" fill="#E7ECE9">A calm architectural scene</text><text x="892" y="302" font-family="Arial,sans-serif" font-size="15" fill="#E7ECE9">at blue hour, editorial photo…</text>
+  <rect x="892" y="322" width="86" height="20" rx="10" fill="#27352D"/><text x="909" y="337" font-family="Arial,sans-serif" font-size="11" fill="#AAB7B0">1 ảnh ref</text>
+  <rect x="868" y="375" width="334" height="54" rx="14" fill="url(#lime)"/><text x="958" y="409" font-family="Arial,sans-serif" font-size="16" font-weight="700" fill="#172018">Thêm và chạy</text>
+  <text x="868" y="474" font-family="Arial,sans-serif" font-size="14" font-weight="700" fill="#92A098">HÀNG CHỜ BỀN VỮNG</text>
+  <rect x="868" y="494" width="334" height="88" rx="16" fill="#18211C"/><circle cx="897" cy="523" r="8" fill="#D8FF73"/><text x="917" y="529" font-family="Arial,sans-serif" font-size="14" fill="#F0F4F1">Đang tạo ảnh 01</text><rect x="892" y="552" width="282" height="7" rx="3.5" fill="#2E3B34"/><rect x="892" y="552" width="218" height="7" rx="3.5" fill="#AEEA78"/>
+  <rect x="868" y="596" width="334" height="88" rx="16" fill="#18211C"/><circle cx="897" cy="625" r="8" fill="#6ED696"/><text x="917" y="631" font-family="Arial,sans-serif" font-size="14" fill="#F0F4F1">Ảnh 02 đã hoàn tất</text><text x="892" y="662" font-family="Arial,sans-serif" font-size="12" fill="#8E9D95">Đã lưu vào thư mục Downloads</text>
+  <text x="868" y="718" font-family="Arial,sans-serif" font-size="13" fill="#829088">Batch prompts · References · Recovery</text>
+</svg>

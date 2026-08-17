@@ -45,6 +45,9 @@ async function execute(tabId, func, args = []) {
   });
   if (!results?.[0]) throw new Error("Gemini injection returned no result.");
   if (results[0].error) throw new Error(results[0].error.message || String(results[0].error));
+  if (results[0].result == null) {
+    throw new Error("Gemini injection returned an empty result.");
+  }
   return results[0].result;
 }
 
@@ -122,6 +125,45 @@ async function prepareAndSubmitOnPage(task, config) {
     return fail("AUTH_REQUIRED", "session", "Gemini composer is unavailable. Sign in first.");
   }
 
+  // Gemini can briefly keep the previous conversation DOM under `/app` while
+  // its router is still committing the real conversation URL. Starting the
+  // next queue item during that transition can make the first Send click land
+  // on a composer that Angular is replacing.
+  if (
+    new URL(location.href).pathname === "/app" &&
+    document.querySelector(selectors.userMessage)
+  ) {
+    await waitFor(
+      () =>
+        new URL(location.href).pathname !== "/app" ||
+        !document.querySelector(selectors.userMessage),
+      5000,
+      100,
+    );
+  }
+
+  // A failed/aborted run can leave its attachment in Gemini's next draft.
+  // Clear that stale draft state before establishing this task's baseline so
+  // references can never leak into or be duplicated in the next queue item.
+  const staleAttachments = [...document.querySelectorAll(selectors.attachmentClose)];
+  for (const closeButton of staleAttachments) closeButton.click();
+  if (
+    staleAttachments.length &&
+    !await waitFor(() => !document.querySelector(selectors.attachment), 5000, 100)
+  ) {
+    return fail(
+      "STALE_ATTACHMENT_CLEAR_FAILED",
+      "upload",
+      "A reference image from the previous Gemini draft could not be removed.",
+      { count: staleAttachments.length },
+    );
+  }
+  if (staleAttachments.length) {
+    record("draft-reset", "Removed stale reference images from the previous Gemini draft.", {
+      count: staleAttachments.length,
+    });
+  }
+
   const generatedImages = () =>
     [...document.querySelectorAll(selectors.generatedImage)]
       .flatMap((image) => [
@@ -133,6 +175,8 @@ async function prepareAndSubmitOnPage(task, config) {
   const baselineTurns = [
     ...document.querySelectorAll(selectors.conversationTurn),
   ];
+  const baselineUserMessages = [...document.querySelectorAll(selectors.userMessage)];
+  const baselineUserCount = baselineUserMessages.length;
   const baseline = {
     capturedAt: new Date().toISOString(),
     pageUrl: location.href,
@@ -142,50 +186,56 @@ async function prepareAndSubmitOnPage(task, config) {
       .map((turn) => turn.getAttribute("data-testid") || "")
       .filter(Boolean),
     turnCount: baselineTurns.length,
+    userCount: baselineUserCount,
   };
   record("baseline", "Recorded existing assistant images.", baseline);
 
+  // Enable image generation before uploading references. Gemini replaces its
+  // composer when this mode changes; doing it after upload can leave the
+  // reference in the next draft while the text prompt is submitted alone.
+  let imageModeEnabled = Boolean(document.querySelector(selectors.imageModeEnabled));
+  if (!imageModeEnabled) {
+    const toolsButton = document.querySelector(selectors.attachmentButton);
+    toolsButton?.click();
+    const createImage = await waitFor(
+      () => findByLabels(selectors.createImageMenuItem, config.labels.createImage),
+      3000,
+    );
+    if (!createImage) {
+      return fail("IMAGE_MODE_MISSING", "mode", "Gemini Create image mode was not found.");
+    }
+    const menuItemEnabled =
+      createImage.getAttribute("aria-checked") === "true" ||
+      createImage.getAttribute("data-state") === "checked";
+    if (!menuItemEnabled) createImage.click();
+    imageModeEnabled = Boolean(
+      await waitFor(
+        () =>
+          document.querySelector(selectors.imageModeEnabled) ||
+          createImage.getAttribute("aria-checked") === "true" ||
+          createImage.getAttribute("data-state") === "checked",
+        5000,
+        100,
+      ),
+    );
+  }
+  if (!imageModeEnabled) {
+    return fail("IMAGE_MODE_NOT_READY", "mode", "Gemini Create image mode did not become ready.");
+  }
+  record("image-mode", "Gemini Create image mode is enabled.", {
+    alreadyEnabled: Boolean(document.querySelector(selectors.imageModeEnabled)),
+  });
+
   if (task.references.length) {
-    const composerForUpload = document.querySelector(selectors.composer);
-    const composerForm = composerForUpload?.closest("form");
-    const chooseFileInput = () => {
-      const inputs = [...document.querySelectorAll(selectors.fileInput)];
-      return inputs
-        .map((candidate) => ({
-          candidate,
-          score:
-            (candidate.id === "upload-files" ? 20 : 0) +
-            (composerForm?.contains(candidate) ? 8 : 0) +
-            (/image/i.test(candidate.accept || "") ? 4 : 0) +
-            (candidate.multiple ? 2 : 0),
-        }))
-        .sort((a, b) => b.score - a.score)[0]?.candidate || null;
-    };
-    const uploadScope =
-      composerForm || composerForUpload?.parentElement?.parentElement || document;
-    const attachmentNodes = () => {
-      const candidates = [
-        ...uploadScope.querySelectorAll(selectors.attachment),
-        ...uploadScope.querySelectorAll(
-          "img[src^='blob:'], img[src^='data:'], button[aria-label*='Remove'], button[aria-label*='remove']",
-        ),
-      ];
-      return [...new Set(candidates)].filter(
-        (node) => node.tagName !== "INPUT" && !node.matches?.(selectors.attachmentButton),
+    const attachmentPreviews = () =>
+      [...document.querySelectorAll(selectors.attachment)].filter(
+        (image) => image.tagName === "IMG",
       );
-    };
-    const attachmentSignatures = () =>
+    const attachmentKeys = () =>
       new Set(
-        attachmentNodes().map((node, index) =>
-          [
-            node.getAttribute?.("data-testid") || "",
-            node.getAttribute?.("aria-label") || "",
-            node.getAttribute?.("alt") || "",
-            node.currentSrc || node.src || "",
-            normalize(node.textContent),
-            index,
-          ].join("|"),
-        ),
+        attachmentPreviews()
+          .map((image) => image.currentSrc || image.src || "")
+          .filter(Boolean),
       );
     const uploadErrorText = () =>
       [...document.querySelectorAll("[data-sonner-toast], [role='alert']")]
@@ -195,27 +245,7 @@ async function prepareAndSubmitOnPage(task, config) {
 
     for (let index = 0; index < task.references.length; index += 1) {
       const reference = task.references[index];
-      let input = chooseFileInput();
-      if (!input) {
-        const add = document.querySelector(selectors.attachmentButton);
-        if (add) add.click();
-        const uploadFiles = await waitFor(
-          () => findByLabels(selectors.uploadFilesMenuItem, config.labels.addFiles),
-          3000,
-        );
-        uploadFiles?.click();
-        input = await waitFor(chooseFileInput, 5000);
-      }
-      if (!input) {
-        return fail(
-          "UPLOAD_INPUT_MISSING",
-          "upload",
-          `Gemini file input was not found for reference ${index + 1}.`,
-          { index, name: reference.name },
-        );
-      }
-
-      const before = attachmentSignatures();
+      const before = attachmentKeys();
       let blob;
       try {
         blob = dataUrlToBlob(reference.dataUrl, reference.type);
@@ -243,32 +273,93 @@ async function prepareAndSubmitOnPage(task, config) {
           lastModified: reference.lastModified || Date.now(),
         }),
       );
-      input.files = transfer.files;
-      input.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
-      input.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
-      record("upload-dispatch", `Dispatched reference ${index + 1}/${task.references.length}.`, {
+      let uploadMethod = "paste";
+      const uploadComposer = document.querySelector(selectors.composer);
+      if (!uploadComposer) {
+        return fail(
+          "COMPOSER_MISSING_BEFORE_UPLOAD",
+          "upload",
+          "Gemini composer disappeared before the reference image could be pasted.",
+        );
+      }
+      uploadComposer.focus();
+      uploadComposer.dispatchEvent(
+        new ClipboardEvent("paste", {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          clipboardData: transfer,
+        }),
+      );
+      record("upload-dispatch", `Pasted reference ${index + 1}/${task.references.length}.`, {
         index,
         name: reference.name,
         size: blob.size,
-        inputId: input.id || "",
-        inputTestId: input.getAttribute("data-testid") || "",
+        method: uploadMethod,
       });
 
-      const verified = await waitFor(() => {
+      let stablePreviewKey = "";
+      let stablePreviewCount = 0;
+      const inspectReadyPreview = () => {
         const errorText = uploadErrorText();
         if (errorText) return { errorText };
-        const after = attachmentSignatures();
-        const hasNewAttachment = [...after].some((signature) => !before.has(signature));
-        const filenameReady = normalize(uploadScope.textContent).includes(normalize(reference.name));
-        const busy = uploadScope.querySelector?.(selectors.uploadBusy);
-        return (hasNewAttachment || filenameReady) && !busy
+        const readyPreviews = attachmentPreviews().filter(
+          (image) =>
+            !before.has(image.currentSrc || image.src || "") &&
+            image.complete &&
+            image.naturalWidth > 0 &&
+            image.naturalHeight > 0,
+        );
+        const preview = readyPreviews.at(-1);
+        if (!preview) return null;
+        const previewContainer = preview.closest("uploader-file-preview");
+        const previewBusy = Boolean(
+          previewContainer?.querySelector(
+            "mat-progress-spinner, [role='progressbar'], [aria-busy='true'], [class*='loading']",
+          ),
+        );
+        if (previewBusy) return null;
+        const previewKey = `${preview.currentSrc || preview.src}|${preview.naturalWidth}x${preview.naturalHeight}`;
+        stablePreviewCount = previewKey === stablePreviewKey ? stablePreviewCount + 1 : 1;
+        stablePreviewKey = previewKey;
+        return stablePreviewCount >= 3
           ? {
-              count: attachmentNodes().length,
-              hasNewAttachment,
-              filenameReady,
+              count: attachmentPreviews().length,
+              previewKey,
+              width: preview.naturalWidth,
+              height: preview.naturalHeight,
+              stableScans: stablePreviewCount,
+              uploadMethod,
             }
           : null;
-      }, 120000, 400);
+      };
+      let verified = await waitFor(inspectReadyPreview, 8000, 250);
+      if (!verified) {
+        const dropZone = document.querySelector(selectors.fileDropZone);
+        if (dropZone) {
+          uploadMethod = "drop";
+          stablePreviewKey = "";
+          stablePreviewCount = 0;
+          transfer.dropEffect = "copy";
+          transfer.effectAllowed = "copy";
+          for (const eventType of ["dragenter", "dragover", "drop", "dragleave"]) {
+            dropZone.dispatchEvent(new DragEvent(eventType, {
+              bubbles: true,
+              cancelable: true,
+              composed: true,
+              dataTransfer: transfer,
+            }));
+          }
+          record("upload-fallback", `Dropped reference ${index + 1}/${task.references.length}.`, {
+            index,
+            name: reference.name,
+            size: blob.size,
+            method: uploadMethod,
+            dropZone: dropZone.getAttribute("file-drop-zone") || dropZone.className || "",
+          });
+          verified = await waitFor(inspectReadyPreview, 42000, 400);
+        }
+      }
       if (!verified || verified.errorText) {
         return fail(
           verified?.errorText ? "UPLOAD_REJECTED" : "UPLOAD_VERIFICATION_FAILED",
@@ -279,7 +370,7 @@ async function prepareAndSubmitOnPage(task, config) {
           {
             index,
             name: reference.name,
-            visible: attachmentNodes().length,
+            visible: attachmentPreviews().length,
             errorText: verified?.errorText || "",
           },
         );
@@ -292,27 +383,27 @@ async function prepareAndSubmitOnPage(task, config) {
     }
   }
 
-  // Gemini can otherwise treat an image prompt as a normal text request.
-  const toolsButton = document.querySelector(selectors.attachmentButton);
-  toolsButton?.click();
-  const createImage = await waitFor(
-    () => findByLabels(selectors.createImageMenuItem, config.labels.createImage),
-    3000,
+  // Uploading a reference can cause Gemini to replace the entire composer.
+  // Reacquire it after image mode is enabled instead of retaining a stale or
+  // temporarily missing node from before the upload.
+  const composer = await waitFor(
+    () => document.querySelector(selectors.composer),
+    15000,
+    100,
   );
-  if (!createImage) {
-    return fail("IMAGE_MODE_MISSING", "mode", "Gemini Create image mode was not found.");
+  if (!composer) {
+    return fail(
+      "COMPOSER_MISSING_AFTER_UPLOAD",
+      "composer",
+      "Gemini composer did not return after the reference image was uploaded.",
+      { referenceCount: task.references.length },
+    );
   }
-  const imageModeEnabled =
-    createImage.getAttribute("aria-checked") === "true" ||
-    createImage.getAttribute("data-state") === "checked";
-  if (!imageModeEnabled) createImage.click();
-  record("image-mode", "Gemini Create image mode is enabled.", {
-    alreadyEnabled: imageModeEnabled,
-  });
-
-  const composer = document.querySelector(selectors.composer);
   composer.focus();
   const selection = window.getSelection();
+  if (!selection) {
+    return fail("PROMPT_WRITE_FAILED", "composer", "Browser selection is unavailable.");
+  }
   const range = document.createRange();
   range.selectNodeContents(composer);
   selection.removeAllRanges();
@@ -331,6 +422,21 @@ async function prepareAndSubmitOnPage(task, config) {
   if (!promptReady) {
     return fail("PROMPT_SYNC_FAILED", "composer", "Gemini editor did not retain the exact prompt.");
   }
+  const readyReferenceCount = [...document.querySelectorAll(selectors.attachment)].filter(
+    (image) =>
+      image.tagName === "IMG" &&
+      image.complete &&
+      image.naturalWidth > 0 &&
+      image.naturalHeight > 0,
+  ).length;
+  if (readyReferenceCount !== task.references.length) {
+    return fail(
+      "REFERENCE_COUNT_MISMATCH",
+      "upload",
+      "The number of visibly ready reference images does not match the task before submission.",
+      { expected: task.references.length, ready: readyReferenceCount },
+    );
+  }
   record("prompt-ready", "Exact prompt is present in the composer.");
 
   const send = await waitFor(() => {
@@ -343,15 +449,90 @@ async function prepareAndSubmitOnPage(task, config) {
 
   send.click();
   record("submit-click", "Clicked send exactly once.");
-  const accepted = await waitFor(() => {
+  const userMessageText = (message) => {
+    const lines = [...message.querySelectorAll(".query-text-line")]
+      .map((line) => line.textContent || "")
+      .join("\n");
+    return normalize(lines || message.innerText || message.textContent);
+  };
+  const matchesSubmittedPrompt = (message) => {
+    const expected = normalize(task.prompt);
+    const extracted = userMessageText(message);
+    const fallback = normalize(message.innerText || message.textContent);
+    return extracted === expected || fallback === expected || fallback.endsWith(expected);
+  };
+  const newUserMessages = () => {
     const users = [...document.querySelectorAll(selectors.userMessage)];
-    const exact = users.some(
-      (message) => normalize(message.innerText) === normalize(task.prompt),
+    const byIdentity = users.filter((message) => !baselineUserMessages.includes(message));
+    return users.length > baselineUserCount
+      ? users.slice(baselineUserCount)
+      : byIdentity;
+  };
+  const inspectSubmission = () => {
+    const users = newUserMessages();
+    const exactUser = users.find(
+      (message) => matchesSubmittedPrompt(message),
     );
-    const cleared = normalize(composer.innerText || composer.textContent) === "";
-    return exact || cleared ? { exactUserMessage: exact, composerCleared: cleared } : null;
-  }, 15000);
+    const liveComposer = document.querySelector(selectors.composer);
+    const cleared = normalize(liveComposer?.innerText || liveComposer?.textContent) === "";
+    const referenceInUserTurn = Boolean(
+      exactUser?.querySelector(selectors.submittedAttachment),
+    );
+    const referencesSubmitted =
+      task.references.length === 0 ||
+      referenceInUserTurn;
+    return exactUser && referencesSubmitted
+      ? {
+          exactUserMessage: true,
+          composerCleared: cleared,
+          referenceInUserTurn,
+          remainingComposerReferences:
+            document.querySelectorAll(selectors.attachment).length,
+        }
+      : null;
+  };
+  let accepted = await waitFor(inspectSubmission, 2500, 100);
   if (!accepted) {
+    const liveComposer = document.querySelector(selectors.composer);
+    const stillDrafted =
+      normalize(liveComposer?.innerText || liveComposer?.textContent) === normalize(task.prompt);
+    const draftReferenceCount = document.querySelectorAll(selectors.attachment).length;
+    const noSubmissionEvidence =
+      newUserMessages().length === 0 &&
+      !document.querySelector(selectors.stopButton);
+    const retrySend = document.querySelector(selectors.sendButton);
+    if (
+      stillDrafted &&
+      noSubmissionEvidence &&
+      draftReferenceCount === task.references.length &&
+      retrySend &&
+      !retrySend.disabled &&
+      retrySend.getAttribute("aria-disabled") !== "true"
+    ) {
+      retrySend.click();
+      record(
+        "submit-retry",
+        "The first click produced no submission evidence; clicked the live Send button once more.",
+        { draftReferenceCount },
+      );
+    }
+    accepted = await waitFor(inspectSubmission, 15000, 100);
+  }
+  if (!accepted) {
+    const newUsers = newUserMessages();
+    const submittedTextWithoutReference = newUsers.some(
+      (message) =>
+        matchesSubmittedPrompt(message) &&
+        !message.querySelector(selectors.submittedAttachment),
+    );
+    if (task.references.length && submittedTextWithoutReference) {
+      return fail(
+        "REFERENCE_NOT_SUBMITTED",
+        "submit",
+        "Gemini submitted the text without the reference image.",
+        { remaining: document.querySelectorAll(selectors.attachment).length },
+      );
+    }
     return fail(
       "SUBMISSION_AMBIGUOUS",
       "submit",
@@ -513,6 +694,64 @@ async function collectResultOnPage(candidate) {
     };
   } catch (error) {
     errors.push(`fetch: ${error.message || String(error)}`);
+  }
+
+  // Gemini's rendered blob can be backed by an opaque cross-origin response:
+  // it displays correctly but taints canvas and cannot be fetched again. Its
+  // own full-size download flow creates a new readable PNG Blob. Intercept
+  // that Blob before Gemini turns it into a browser download.
+  try {
+    const image = [...document.images].find((entry) =>
+      (entry.currentSrc || entry.src) === source || entry.src === source,
+    );
+    if (!image) throw new Error("Rendered image element was not found.");
+    const turn = image.closest("model-response");
+    const downloadButton = turn?.querySelector(
+      "[data-test-id='download-generated-image-button'] button, button[aria-label='Download full size image']",
+    );
+    if (!downloadButton) throw new Error("Full-size download button was not found.");
+
+    const originalCreateObjectURL = URL.createObjectURL;
+    const originalAnchorClick = HTMLAnchorElement.prototype.click;
+    let finishCapture;
+    const capture = new Promise((resolve) => {
+      finishCapture = resolve;
+    });
+    try {
+      URL.createObjectURL = function createObjectURL(value) {
+        const objectUrl = originalCreateObjectURL.call(URL, value);
+        if (value instanceof Blob && value.size && value.type.startsWith("image/")) {
+          const reader = new FileReader();
+          reader.onload = () =>
+            finishCapture({
+              dataUrl: String(reader.result || ""),
+              type: value.type,
+              size: value.size,
+            });
+          reader.onerror = () => finishCapture(null);
+          reader.readAsDataURL(value);
+        }
+        return objectUrl;
+      };
+      HTMLAnchorElement.prototype.click = function click() {
+        if (this.download && String(this.href || "").startsWith("blob:")) return;
+        return originalAnchorClick.call(this);
+      };
+      downloadButton.click();
+      const captured = await Promise.race([
+        capture,
+        new Promise((resolve) => setTimeout(() => resolve(null), 60000)),
+      ]);
+      if (!captured?.dataUrl?.startsWith("data:image/") || !captured.size) {
+        throw new Error("Gemini did not expose a readable full-size image Blob.");
+      }
+      return { ok: true, ...captured, method: "download-intercept" };
+    } finally {
+      URL.createObjectURL = originalCreateObjectURL;
+      HTMLAnchorElement.prototype.click = originalAnchorClick;
+    }
+  } catch (error) {
+    errors.push(`download: ${error.message || String(error)}`);
   }
 
   return {

@@ -1558,11 +1558,12 @@ async function executeQueueItem(item) {
     error: null,
   });
   logSession("info", "session_start", {
-    message: isRecovery
+    message: `Extension ${chrome.runtime.getManifest().version} · ${isRecovery
       ? "Tiếp tục theo dõi prompt đã gửi trước khi side panel reload; không gửi lại."
       : item.requiresFreshChat
         ? "Task retry sẽ mở New Chat mới; không dùng lại tab Gemini đã lỗi."
-        : "Dùng tab Gemini hiện có, không reload trang.",
+        : "Dùng tab Gemini hiện có, không reload trang."}`,
+    details: { extensionVersion: chrome.runtime.getManifest().version },
   });
 
   try {
@@ -1654,15 +1655,17 @@ async function executeQueueItem(item) {
         config,
       );
       for (const entry of submission?.trace || []) {
-        logSession(submission.ok ? "info" : "error", `[Gemini +${entry.elapsedMs}ms] ${entry.step}`, {
+        logSession("info", `[Gemini +${entry.elapsedMs}ms] ${entry.step}`, {
           message: entry.message,
           details: entry.details || null,
         });
       }
       if (!submission?.ok) {
-        throw Object.assign(new Error(`${submission.step}: ${submission.message}`), {
-          code: submission.code || "INJECTION_FAILED",
-          diagnostics: submission.diagnostics,
+        const failureStep = submission?.step || "injection";
+        const failureMessage = submission?.message || "Gemini injection returned no result.";
+        throw Object.assign(new Error(`${failureStep}: ${failureMessage}`), {
+          code: submission?.code || "INJECTION_FAILED",
+          diagnostics: submission?.diagnostics,
         });
       }
     }

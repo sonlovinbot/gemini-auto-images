@@ -42,14 +42,14 @@ test("routes VOX START_BATCH to the proven side-panel executor only", () => {
 });
 
 test("answers a read-only extension check before VOX creates a batch", () => {
-  assert.match(bridge, /"CHECK_EXTENSION"/);
-  assert.match(bridge, /"CHECK_EXTENSION_RESULT"/);
+  assert.match(bridge, /"CHECK_GEMINI_EXTENSION"/);
+  assert.match(bridge, /"CHECK_GEMINI_EXTENSION_RESULT"/);
   assert.match(bridge, /connectionMode: "local-development"/);
   assert.match(bridge, /runtime\.getManifest\(\)\.version/);
   assert.match(bridge, /EXTENSION_CONTEXT_INVALIDATED/);
   assert.match(bridge, /event\.stopImmediatePropagation\(\)/);
   assert.match(bridge, /window\.addEventListener\("message", listener, true\)/);
-  assert.match(bridge, /"OPEN_CHATGPT_EXTENSION"/);
+  assert.match(bridge, /"OPEN_GEMINI_EXTENSION"/);
   assert.match(bridge, /type: "OPEN_SIDE_PANEL"/);
 });
 
